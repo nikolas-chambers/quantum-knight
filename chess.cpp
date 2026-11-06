@@ -162,33 +162,104 @@ string sqName(int s){ string r; r+=('a'+fileOf(s)); r+=('1'+rankOf(s)); return r
 string moveStr(const Move&m){ string r=sqName(m.from)+sqName(m.to); if(m.promo) r+=char(tolower(m.promo)); return r; }
 
 long long nodes;
+
+// ---- Zobrist hashing ----
+u64 zPiece[256][128], zSide;
+void initZobrist(){ std::mt19937_64 rng(0x9E3779B97F4A7C15ULL);
+  for(int p=0;p<256;p++) for(int s=0;s<128;s++) zPiece[p][s]=rng();
+  zSide=rng(); }
+u64 hashPos(){ u64 h=0;
+  for(int s=0;s<128;s++){ if(onBoard(s)&&board[s]) h^=zPiece[board[s]][s]; }
+  if(sideToMove) h^=zSide; return h; }
+
+// ---- Transposition table ----
+enum{ TT_EXACT=0, TT_LOWER=1, TT_UPPER=2 };
+struct TTE{ u64 key; int depth; int score; int flag; Move best; };
+const int TT_BITS=22, TT_SIZE=1<<TT_BITS, TT_MASK=TT_SIZE-1;
+vector<TTE> TT(TT_SIZE);
+void ttClear(){ for(auto&e:TT){ e.key=0; e.depth=-1; } }
+
+// ---- move ordering ----
+Move killers[128][2];
+inline int mvvlva(const Move&m){            // victim high, attacker low
+  int vic=board[m.to], att=board[m.from];
+  int vv = vic?abs(val[vic]):(m.flag==2?100:0);   // en-passant captures a pawn
+  return vv*16 - (att?abs(val[att]):0); }
+void orderMoves(vector<Move>&mv,const Move&ttm,int ply){
+  vector<pair<int,Move>> sc; sc.reserve(mv.size());
+  for(auto&m:mv){ int s;
+    bool cap = board[m.to]!=EMPTY || m.flag==2;
+    if(ttm.from!=ttm.to && m.from==ttm.from && m.to==ttm.to && m.promo==ttm.promo) s=1000000;
+    else if(cap) s=100000+mvvlva(m);
+    else if((killers[ply][0].from==m.from&&killers[ply][0].to==m.to)) s=90000;
+    else if((killers[ply][1].from==m.from&&killers[ply][1].to==m.to)) s=80000;
+    else s=0;
+    sc.push_back({s,m}); }
+  sort(sc.begin(),sc.end(),[](const pair<int,Move>&a,const pair<int,Move>&b){ return a.first>b.first; });
+  for(size_t i=0;i<mv.size();i++) mv[i]=sc[i].second;
+}
+
 int qsearch(int alpha,int beta){
   int stand=evaluate(); if(stand>=beta) return beta; if(stand>alpha) alpha=stand;
   vector<Move> mv; legalMoves(mv);
+  Move none{0,0,0,0}; orderMoves(mv,none,0);
   for(auto&m:mv){ if(board[m.to]==EMPTY && m.flag!=2) continue;   // captures only (incl. en passant)
     Undo u; makeMove(m,u); nodes++; int sc=-qsearch(-beta,-alpha); unmakeMove(m,u);
     if(sc>=beta) return beta; if(sc>alpha) alpha=sc; }
   return alpha;
 }
-int negamax(int depth,int alpha,int beta){
+int negamax(int depth,int alpha,int beta,int ply){
   if(depth==0){ return qsearch(alpha,beta); }
+  u64 key=hashPos(); TTE&e=TT[key&TT_MASK];
+  Move ttm{0,0,0,0}; int alphaOrig=alpha;
+  if(e.key==key && e.depth>=depth){
+    if(e.flag==TT_EXACT) return e.score;
+    if(e.flag==TT_LOWER && e.score>alpha) alpha=e.score;
+    else if(e.flag==TT_UPPER && e.score<beta) beta=e.score;
+    if(alpha>=beta) return e.score; ttm=e.best; }
+  else if(e.key==key) ttm=e.best;
   vector<Move> mv; legalMoves(mv);
-  if(mv.empty()){ if(inCheck(sideToMove)) return -30000+(0); return 0; }
-  // simple ordering: captures first
-  sort(mv.begin(),mv.end(),[](const Move&a,const Move&b){ return (board[a.to]!=EMPTY)>(board[b.to]!=EMPTY); });
-  int best=-100000;
-  for(auto&m:mv){ Undo u; makeMove(m,u); nodes++; int sc=-negamax(depth-1,-beta,-alpha); unmakeMove(m,u);
-    if(sc>best)best=sc; if(best>alpha)alpha=best; if(alpha>=beta)break; }
+  if(mv.empty()){ if(inCheck(sideToMove)) return -30000+ply; return 0; }
+  orderMoves(mv,ttm,ply);
+  int best=-100000; Move bm=mv[0];
+  for(auto&m:mv){ Undo u; makeMove(m,u); nodes++; int sc=-negamax(depth-1,-beta,-alpha,ply+1); unmakeMove(m,u);
+    if(sc>best){best=sc;bm=m;} if(best>alpha)alpha=best;
+    if(alpha>=beta){ if(board[m.to]==EMPTY && m.flag!=2){ killers[ply][1]=killers[ply][0]; killers[ply][0]=m; } break; } }
+  int flag = best<=alphaOrig?TT_UPPER : best>=beta?TT_LOWER : TT_EXACT;
+  if(e.depth<=depth){ e.key=key; e.depth=depth; e.score=best; e.flag=flag; e.best=bm; }
   return best;
 }
 Move searchBest(int maxDepth){
+  ttClear(); for(auto&k:killers){ k[0]={0,0,0,0}; k[1]={0,0,0,0}; }
   Move best{0,0,0,0};
   for(int d=1;d<=maxDepth;d++){ vector<Move> mv; legalMoves(mv); if(mv.empty())break;
+    u64 key=hashPos(); Move ttm = (TT[key&TT_MASK].key==key)?TT[key&TT_MASK].best:best;
     int alpha=-100000,beta=100000,bsc=-100000; Move bm=mv[0];
-    sort(mv.begin(),mv.end(),[](const Move&a,const Move&b){ return (board[a.to]!=EMPTY)>(board[b.to]!=EMPTY); });
-    for(auto&m:mv){ Undo u; makeMove(m,u); nodes++; int sc=-negamax(d-1,-beta,-alpha); unmakeMove(m,u);
+    orderMoves(mv,ttm,0);
+    for(auto&m:mv){ Undo u; makeMove(m,u); nodes++; int sc=-negamax(d-1,-beta,-alpha,1); unmakeMove(m,u);
       if(sc>bsc){bsc=sc;bm=m;} if(bsc>alpha)alpha=bsc; }
-    best=bm; }
+    best=bm;
+    TTE&e=TT[key&TT_MASK]; e.key=key; e.depth=d; e.score=bsc; e.flag=TT_EXACT; e.best=bm; }
+  return best;
+}
+// iterative deepening with a wall-clock budget (ms); TT persists across depths
+Move searchTimed(long long budgetMs){
+  using namespace std::chrono;
+  auto t0=steady_clock::now();
+  ttClear(); for(auto&k:killers){ k[0]={0,0,0,0}; k[1]={0,0,0,0}; }
+  Move best{0,0,0,0};
+  for(int d=1;d<=64;d++){
+    vector<Move> mv; legalMoves(mv); if(mv.empty())break;
+    u64 key=hashPos(); Move ttm=(TT[key&TT_MASK].key==key)?TT[key&TT_MASK].best:best;
+    int alpha=-100000,beta=100000,bsc=-100000; Move bm=mv[0];
+    orderMoves(mv,ttm,0);
+    for(auto&m:mv){ Undo u; makeMove(m,u); nodes++; int sc=-negamax(d-1,-beta,-alpha,1); unmakeMove(m,u);
+      if(sc>bsc){bsc=sc;bm=m;} if(bsc>alpha)alpha=bsc; }
+    best=bm;
+    TTE&e=TT[key&TT_MASK]; e.key=key; e.depth=d; e.score=bsc; e.flag=TT_EXACT; e.best=bm;
+    auto el=duration_cast<milliseconds>(steady_clock::now()-t0).count();
+    if(el*2 >= budgetMs) break;   // unlikely to finish another, deeper iteration
+  }
   return best;
 }
 
@@ -204,7 +275,7 @@ Move parseUci(const string&s){ // e2e4 / e7e8q
 }
 
 int main(int argc,char**argv){
-  initVal();
+  initVal(); initZobrist();
   if(argc>=4 && string(argv[1])=="perft"){ setFen(argv[2]); cout<<perft(atoi(argv[3]))<<endl; return 0; }
   // UCI
   string line;
@@ -221,8 +292,17 @@ int main(int argc,char**argv){
         if(w!="moves") is>>w; }
       if(w=="moves"){ string mvs; while(is>>mvs){ Move m=parseUci(mvs); Undo u; makeMove(m,u);} }
     }
-    else if(tok=="go"){ int depth=4; string a; while(is>>a){ if(a=="depth") is>>depth; }
-      nodes=0; Move b=searchBest(depth); cout<<"bestmove "<<moveStr(b)<<"\n"<<flush; }
+    else if(tok=="go"){ int depth=-1; long long movetime=-1,wt=-1,bt=-1,winc=0,binc=0; string a;
+      while(is>>a){ if(a=="depth"){is>>depth;} else if(a=="movetime"){is>>movetime;}
+        else if(a=="wtime"){is>>wt;} else if(a=="btime"){is>>bt;}
+        else if(a=="winc"){is>>winc;} else if(a=="binc"){is>>binc;} }
+      nodes=0; Move b;
+      if(depth>0 && movetime<0 && wt<0) b=searchBest(depth);
+      else { long long budget=movetime;
+        if(budget<0){ long long clk=(sideToMove==0?wt:bt), inc=(sideToMove==0?winc:binc);
+          budget = clk>0 ? clk/30 + inc : 1000; }
+        b=searchTimed(budget); }
+      cout<<"bestmove "<<moveStr(b)<<"\n"<<flush; }
     else if(tok=="quit") break;
   }
   return 0;
