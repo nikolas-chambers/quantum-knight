@@ -30,16 +30,19 @@ Perft from the command line:
 ```
 
 ## Strength
-**≈ 2000 Elo** — scored 50.8% (112–108–30) over a 250-game match vs Stockfish 17.1
-in calibrated limited-strength mode (`UCI_Elo=2000`), TC 10+0.1, with an opening book.
+**≈ 2000 Elo** (time control, honest estimate). Two 250-game matches vs Stockfish 17.1 in
+calibrated limited-strength mode (TC 10+0.1, opening book):
 
-| Opponent             | Score  | Note              |
-|----------------------|:------:|-------------------|
-| Stockfish `UCI_Elo=2000` | 50.8% | 250 games → ≈2000 Elo |
-| Stockfish skill 7    | 5.5/8  | winning record    |
-| Stockfish skill 6    | 4.0/8  | ~even             |
+| Opponent                 | Score | Implied Elo |
+|--------------------------|:-----:|:-----------:|
+| Stockfish `UCI_Elo=2000` | 50.8% | ≈ 2006      |
+| Stockfish `UCI_Elo=2200` | 24.8% | ≈ 2007      |
 
-See `RESULTS.md` for full method and numbers.
+Separately, at a **fixed depth of 5** (which also caps Stockfish's search), it holds a
+winning record across **skill levels 1–12**. That flatters the engine — the ~2000 Elo above
+is the honest overall number; climbing it needs deeper *search*, not just evaluation.
+
+See `RESULTS.md` for the full ladder, method, and the goal.
 
 ## Testing
 - `perft_key.json` — Stockfish-verified perft counts
