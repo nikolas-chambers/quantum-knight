@@ -356,26 +356,103 @@ int qsearch(int alpha,int beta){
     if(sc>=beta) return beta; if(sc>alpha) alpha=sc; }
   return alpha;
 }
-int negamax(int depth,int alpha,int beta,int ply){
-  if(depth==0){ return qsearch(alpha,beta); }
-  u64 key=hashPos(); TTE&e=TT[key&TT_MASK];
-  Move ttm{0,0,0,0}; int alphaOrig=alpha;
-  if(e.key==key && e.depth>=depth){
-    if(e.flag==TT_EXACT) return e.score;
-    if(e.flag==TT_LOWER && e.score>alpha) alpha=e.score;
-    else if(e.flag==TT_UPPER && e.score<beta) beta=e.score;
-    if(alpha>=beta) return e.score; ttm=e.best; }
-  else if(e.key==key) ttm=e.best;
-  vector<Move> mv; legalMoves(mv);
-  if(mv.empty()){ if(inCheck(sideToMove)) return -30000+ply; return 0; }
-  orderMoves(mv,ttm,ply);
-  int best=-100000; Move bm=mv[0];
-  for(auto&m:mv){ Undo u; makeMove(m,u); nodes++; int sc=-negamax(depth-1,-beta,-alpha,ply+1); unmakeMove(m,u);
-    if(sc>best){best=sc;bm=m;} if(best>alpha)alpha=best;
-    if(alpha>=beta){ if(board[m.to]==EMPTY && m.flag!=2){ killers[ply][1]=killers[ply][0]; killers[ply][0]=m; } break; } }
-  int flag = best<=alphaOrig?TT_UPPER : best>=beta?TT_LOWER : TT_EXACT;
-  if(e.depth<=depth){ e.key=key; e.depth=depth; e.score=best; e.flag=flag; e.best=bm; }
-  return best;
+// fn: negamax
+int negamax(int depth, int alpha, int beta, int ply) {
+    // ---------- leaf ----------
+    if (depth == 0) {
+        return qsearch(alpha, beta);
+    }
+
+    // ---------- null‑move pruning ----------
+    // Only if we are not in check and have enough depth
+    if (depth >= 3 && !inCheck(sideToMove)) {
+        const int R = 2 + depth / 4;                 // reduction
+        // make a null move: simply toggle side to move
+        sideToMove ^= 1;
+        int score = -negamax(depth - R, -beta, -beta + 1, ply + 1);
+        sideToMove ^= 1;                             // undo toggle
+        if (score >= beta) return beta;
+    }
+
+    // ---------- transposition table ----------
+    u64 key = hashPos();
+    TTE &e = TT[key & TT_MASK];
+    Move ttm{0, 0, 0, 0};
+    int alphaOrig = alpha;
+
+    if (e.key == key && e.depth >= depth) {
+        if (e.flag == TT_EXACT) return e.score;
+        if (e.flag == TT_LOWER && e.score > alpha) alpha = e.score;
+        else if (e.flag == TT_UPPER && e.score < beta) beta = e.score;
+        if (alpha >= beta) return e.score;
+        ttm = e.best;
+    } else if (e.key == key) {
+        ttm = e.best;
+    }
+
+    // ---------- move generation ----------
+    vector<Move> mv;
+    legalMoves(mv);
+    if (mv.empty()) {
+        if (inCheck(sideToMove)) return -30000 + ply;   // checkmate
+        return 0;                                        // stalemate
+    }
+
+    orderMoves(mv, ttm, ply);
+
+    int best = -100000;
+    Move bestMove = mv[0];
+    int movesTried = 0;
+
+    for (const Move &m : mv) {
+        Undo u;
+        makeMove(m, u);
+        nodes++;
+
+        bool givesCheck = inCheck(sideToMove);   // sideToMove is opponent after makeMove
+        int newDepth = depth - 1;
+
+        // ---------- late‑move reductions ----------
+        if (movesTried >= 3 && depth >= 3 && !givesCheck
+            && board[m.to] != EMPTY && m.flag != 2) {
+            newDepth = depth - 2;                // simple reduction
+        }
+
+        // ---------- check extension ----------
+        if (givesCheck) ++newDepth;
+
+        int score = -negamax(newDepth, -beta, -alpha, ply + 1);
+        unmakeMove(m, u);
+        ++movesTried;
+
+        if (score > best) {
+            best = score;
+            bestMove = m;
+        }
+        if (best > alpha) alpha = best;
+        if (alpha >= beta) {
+            // store killer move (only for non‑captures)
+            if (board[m.to] == EMPTY && m.flag != 2) {
+                killers[ply][1] = killers[ply][0];
+                killers[ply][0] = m;
+            }
+            break;
+        }
+    }
+
+    // ---------- store in TT ----------
+    int flag = best <= alphaOrig ? TT_UPPER
+                                 : best >= beta ? TT_LOWER
+                                                : TT_EXACT;
+    if (e.depth <= depth) {
+        e.key = key;
+        e.depth = depth;
+        e.score = best;
+        e.flag = flag;
+        e.best = bestMove;
+    }
+
+    return best;
 }
 Move searchBest(int maxDepth){
   ttClear(); for(auto&k:killers){ k[0]={0,0,0,0}; k[1]={0,0,0,0}; }
