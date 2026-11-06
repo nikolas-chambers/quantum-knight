@@ -1,6 +1,6 @@
 # QuantumKnight — Results
 
-Match results against [Stockfish](https://stockfishchess.org/) at various skill levels.
+Match results against [Stockfish 17.1](https://stockfishchess.org/) at various skill levels.
 QuantumKnight plays White; both engines search to the same fixed depth.
 
 ## Strength ladder
