@@ -1,0 +1,6 @@
+engine
+fen_engine
+*.o
+engine.cpp
+fen.cpp
+__pycache__/
