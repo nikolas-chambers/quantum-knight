@@ -162,8 +162,16 @@ string sqName(int s){ string r; r+=('a'+fileOf(s)); r+=('1'+rankOf(s)); return r
 string moveStr(const Move&m){ string r=sqName(m.from)+sqName(m.to); if(m.promo) r+=char(tolower(m.promo)); return r; }
 
 long long nodes;
+int qsearch(int alpha,int beta){
+  int stand=evaluate(); if(stand>=beta) return beta; if(stand>alpha) alpha=stand;
+  vector<Move> mv; legalMoves(mv);
+  for(auto&m:mv){ if(board[m.to]==EMPTY && m.flag!=2) continue;   // captures only (incl. en passant)
+    Undo u; makeMove(m,u); nodes++; int sc=-qsearch(-beta,-alpha); unmakeMove(m,u);
+    if(sc>=beta) return beta; if(sc>alpha) alpha=sc; }
+  return alpha;
+}
 int negamax(int depth,int alpha,int beta){
-  if(depth==0){ return evaluate(); }
+  if(depth==0){ return qsearch(alpha,beta); }
   vector<Move> mv; legalMoves(mv);
   if(mv.empty()){ if(inCheck(sideToMove)) return -30000+(0); return 0; }
   // simple ordering: captures first
