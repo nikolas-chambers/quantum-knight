@@ -1,4 +1,4 @@
-# MOM spec — derived by Claude playing the role (Wizard-of-Oz)
+# MOM spec — Wizard-of-Oz role
 # Point: learn exactly what to configure opencode-mom to do, by doing it manually first.
 
 ## Mom's loop (per micro-rung)

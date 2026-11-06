@@ -6,10 +6,10 @@ North star = beat Stockfish (moonshot/ceiling). The *grade bar* is a reachable l
 
 ## The family / roles
 - **Kiddo (leverage village)** DOES the work — writes the engine.
-- **Teachers:** Nik (positional judgment / taste) + Claude (mechanics). We teach, never hand answers.
+- **Teachers:** Nik (positional judgment / taste) + the teacher (mechanics). We teach, never hand answers.
 - **Examiner:** perft + Stockfish. Incorruptible. Final word — grades the teachers too.
 - **Mom (opencode):** NOT wired yet. Future build = she *watches* runs + keeps notes
-  (the "watch" verb of the mothering cord). Until then, Claude keeps these notes.
+  (the "watch" verb of the mothering cord). Until then, the teacher keeps these notes.
 
 ## The grading ladder (each rung: pass -> accept -> climb)
 1. perft-exact movegen  (THIS rung)
