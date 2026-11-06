@@ -1,7 +1,7 @@
 # QuantumKnight
 
 A from-scratch chess engine in a single C++17 file. UCI-compatible, perft-verified,
-and holding a winning record against Stockfish 17.1 up to skill level 7.
+and rated **≈ 2000 Elo** (estimated).
 
 ## Features
 - **0x88 board** representation with fully legal move generation
@@ -30,16 +30,23 @@ Perft from the command line:
 ```
 
 ## Strength
-8-game matches at fixed depth 5, colors alternated, vs Stockfish 17.1:
+**≈ 2000 Elo** — scored 50.8% (112–108–30) over a 250-game match vs Stockfish 17.1
+in calibrated limited-strength mode (`UCI_Elo=2000`), TC 10+0.1, with an opening book.
 
-| Opponent          | Score | W–D–L |
-|-------------------|:-----:|:-----:|
-| Stockfish skill 6 | 4.0/8 | 2–4–2 |
-| Stockfish skill 7 | 5.5/8 | 5–1–2 |
+| Opponent             | Score  | Note              |
+|----------------------|:------:|-------------------|
+| Stockfish `UCI_Elo=2000` | 50.8% | 250 games → ≈2000 Elo |
+| Stockfish skill 7    | 5.5/8  | winning record    |
+| Stockfish skill 6    | 4.0/8  | ~even             |
 
-See `RESULTS.md` for details. (Single games at these skill levels are noisy, so
-strength is measured in multi-game matches.)
+See `RESULTS.md` for full method and numbers.
 
 ## Testing
 - `perft_key.json` — Stockfish-verified perft counts
 - `game.py <opponent> [--skill N] [--time MS|--depth N]` — play vs any UCI engine (needs `python-chess`)
+
+## Credits & tooling
+QuantumKnight is an independent engine. These tools are used only for testing and rating:
+- [Stockfish](https://stockfishchess.org/) — opponent and perft oracle
+- [fastchess](https://github.com/Disservin/fastchess) — tournament runner
+- [UHO opening book](https://github.com/official-stockfish/books) — match openings
