@@ -1,6 +1,9 @@
 engine
+cand
+cand.cpp
+best.cpp
 fen_engine
+gym.log
 *.o
 engine.cpp
 fen.cpp
-__pycache__/
