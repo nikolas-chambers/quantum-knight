@@ -1,7 +1,7 @@
 # QuantumKnight
 
 A from-scratch chess engine in a single C++17 file. UCI-compatible, perft-verified,
-and strong enough to beat Stockfish up to skill level 6.
+and strong enough to beat Stockfish 17.1 up to skill level 6.
 
 ## Features
 - **0x88 board** representation with fully legal move generation
@@ -30,7 +30,7 @@ Perft from the command line:
 ```
 
 ## Strength
-At equal search depth, versus Stockfish skill levels:
+At equal search depth, versus Stockfish 17.1 skill levels:
 
 | Opponent          | Result |
 |-------------------|--------|
@@ -45,4 +45,4 @@ See `RESULTS.md` for the full ladder.
 
 ## Testing
 - `perft_key.json` — Stockfish-verified perft counts
-- `game.py <skill> <depth>` — play a game vs Stockfish (needs `python-chess` + Stockfish)
+- `game.py <opponent> [--skill N] [--time MS|--depth N]` — play vs any UCI engine (needs `python-chess`)
