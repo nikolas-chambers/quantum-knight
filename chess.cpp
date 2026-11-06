@@ -152,78 +152,158 @@ const int PST_N[64]={-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,0,0,0,-20,-40, -
 const int PST_B[64]={-20,-10,-10,-10,-10,-10,-10,-20, -10,5,0,0,0,0,5,-10, -10,10,10,10,10,10,10,-10, -10,0,10,10,10,10,0,-10, -10,5,5,10,10,5,5,-10, -10,0,5,10,10,5,0,-10, -10,0,0,0,0,0,0,-10, -20,-10,-10,-10,-10,-10,-10,-20};
 const int PST_K[64]={20,30,10,0,0,10,30,20, 20,20,0,0,0,0,20,20, -10,-20,-20,-20,-20,-20,-20,-10, -20,-30,-30,-40,-40,-30,-30,-20, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30};
 int evaluate() {
-  int s = 0;
-  for (int q = 0; q < 128; q++) {
-    if (!onBoard(q) || !board[q]) continue;
-    int p = board[q];
-    s += val[p];
-    int mi = (colorOf(p) == 0) ? (rankOf(q) * 8 + fileOf(q)) : ((rankOf(q) * 8 + fileOf(q)) ^ 56);
-    int t = typeOf(p), ps = 0;
-    if (t == 'p') ps = PST_P[mi]; 
-    else if (t == 'n') ps = PST_N[mi]; 
-    else if (t == 'b') ps = PST_B[mi]; 
-    else if (t == 'k') ps = PST_K[mi];
-    s += (colorOf(p) == 0) ? ps : -ps;
-  }
-
-  // Passed pawns
-  for (int q = 0; q < 128; q++) {
-    if (!onBoard(q) || board[q] != 'p' && board[q] != 'P') continue;
-    int p = board[q];
-    int rank = rankOf(q);
-    int file = fileOf(q);
-    bool passed = true;
-    for (int r = (colorOf(p) == 0) ? rank + 1 : rank - 1; (colorOf(p) == 0) ? r < 8 : r >= 0; r += (colorOf(p) == 0) ? 1 : -1) {
-      if (board[(r * 8) + file] == (colorOf(p) == 0) ? 'p' : 'P') {
-        passed = false;
-        break;
-      }
+    // material + piece‑square tables
+    int s = 0;
+    for (int q = 0; q < 128; ++q) {
+        if (!onBoard(q) || !board[q]) continue;
+        int p = board[q];
+        s += val[p];
+        int mi = (colorOf(p) == 0)
+                 ? (rankOf(q) * 8 + fileOf(q))
+                 : ((rankOf(q) * 8 + fileOf(q)) ^ 56);
+        int ps = 0;
+        switch (typeOf(p)) {
+            case 'p': ps = PST_P[mi]; break;
+            case 'n': ps = PST_N[mi]; break;
+            case 'b': ps = PST_B[mi]; break;
+            case 'k': ps = PST_K[mi]; break;
+        }
+        s += (colorOf(p) == 0) ? ps : -ps;
     }
-    if (passed) s += (colorOf(p) == 0) ? 50 : -50;
-  }
 
-  // Rook on open or half-open file
-  for (int q = 0; q < 128; q++) {
-    if (!onBoard(q) || board[q] != 'r' && board[q] != 'R') continue;
-    int p = board[q];
-    int file = fileOf(q);
-    bool open = true;
-    bool halfOpen = false;
-    for (int r = 0; r < 8; r++) {
-      if (board[(r * 8) + file] == (colorOf(p) == 0) ? 'p' : 'P') {
-        open = false;
-        halfOpen = true;
-      }
+    // bishop pair
+    int whiteB = 0, blackB = 0;
+    for (int q = 0; q < 128; ++q) {
+        if (!onBoard(q)) continue;
+        if (board[q] == 'b') ++whiteB;
+        else if (board[q] == 'B') ++blackB;
     }
-    if (open) s += (colorOf(p) == 0) ? 20 : -20;
-    else if (halfOpen) s += (colorOf(p) == 0) ? 10 : -10;
-  }
+    if (whiteB >= 2) s += 45;
+    if (blackB >= 2) s -= 45;
 
-  // King pawn shield
-  for (int q = 0; q < 128; q++) {
-    if (!onBoard(q) || board[q] != 'p' && board[q] != 'P') continue;
-    int p = board[q];
-    int rank = rankOf(q);
-    int file = fileOf(q);
-    if ((colorOf(p) == 0 && rank >= 6) || (colorOf(p) == 1 && rank <= 1)) {
-      if (fileOf(kingSq[colorOf(p)]) == file || fileOf(kingSq[colorOf(p)]) == file + 1 || fileOf(kingSq[colorOf(p)]) == file - 1) {
-        s += (colorOf(p) == 0) ? 10 : -10;
-      }
+    // passed pawns (stronger detection)
+    auto idx = [&](int r, int f) { return r * 8 + f; };
+    for (int q = 0; q < 128; ++q) {
+        if (!onBoard(q)) continue;
+        char p = board[q];
+        if (p != 'p' && p != 'P') continue;
+        int r = rankOf(q), f = fileOf(q);
+        bool passed = true;
+        if (colorOf(p) == 0) {               // white pawn
+            for (int rr = r + 1; rr < 8 && passed; ++rr) {
+                for (int ff = f - 1; ff <= f + 1; ++ff) {
+                    if (ff < 0 || ff > 7) continue;
+                    if (board[idx(rr, ff)] == 'P') passed = false;
+                }
+            }
+            if (passed) s += 55;
+        } else {                              // black pawn
+            for (int rr = r - 1; rr >= 0 && passed; --rr) {
+                for (int ff = f - 1; ff <= f + 1; ++ff) {
+                    if (ff < 0 || ff > 7) continue;
+                    if (board[idx(rr, ff)] == 'p') passed = false;
+                }
+            }
+            if (passed) s -= 55;
+        }
     }
-  }
 
-  // Bishop pair
-  int whiteBishops = 0;
-  int blackBishops = 0;
-  for (int q = 0; q < 128; q++) {
-    if (!onBoard(q) || board[q] != 'b' && board[q] != 'B') continue;
-    if (colorOf(board[q]) == 0) whiteBishops++;
-    else blackBishops++;
-  }
-  if (whiteBishops >= 2) s += 50;
-  if (blackBishops >= 2) s -= 50;
+    // rook on open / half‑open files
+    for (int q = 0; q < 128; ++q) {
+        if (!onBoard(q)) continue;
+        char p = board[q];
+        if (p != 'r' && p != 'R') continue;
+        int f = fileOf(q);
+        int whitePawns = 0, blackPawns = 0;
+        for (int r = 0; r < 8; ++r) {
+            char sq = board[idx(r, f)];
+            if (sq == 'p') ++whitePawns;
+            else if (sq == 'P') ++blackPawns;
+        }
+        if (whitePawns == 0 && blackPawns == 0) {            // completely open
+            s += (colorOf(p) == 0) ? 30 : -30;
+        } else if ((colorOf(p) == 0 && blackPawns == 0) ||
+                   (colorOf(p) == 1 && whitePawns == 0)) { // half‑open
+            s += (colorOf(p) == 0) ? 15 : -15;
+        }
+    }
 
-  return sideToMove == 0 ? s : -s;
+    // mobility for both sides (weighted)
+    int savedSide = sideToMove;
+    std::vector<Move> mv;
+    sideToMove = 0;
+    mv.clear(); genMoves(mv);
+    int mobW = mv.size();
+    sideToMove = 1;
+    mv.clear(); genMoves(mv);
+    int mobB = mv.size();
+    sideToMove = savedSide;
+    s += (mobW - mobB) * 5;
+
+    // king safety: pawn shield + enemy attacks around king
+    for (int color = 0; color < 2; ++color) {
+        int ks = kingSq[color];
+        int kr = rankOf(ks), kf = fileOf(ks);
+        // pawn shield (three squares in front of the king)
+        int shield = 0;
+        int forward = (color == 0) ? -1 : 1;
+        for (int df = -1; df <= 1; ++df) {
+            int r = kr + forward, f = kf + df;
+            if (r < 0 || r > 7 || f < 0 || f > 7) continue;
+            char sq = board[idx(r, f)];
+            if ((color == 0 && sq == 'p') || (color == 1 && sq == 'P'))
+                ++shield;
+        }
+        s += (color == 0) ? shield * 12 : -shield * 12;
+
+        // enemy attacks on the king's surrounding squares
+        int attacks = 0;
+        for (int dr = -1; dr <= 1; ++dr) {
+            for (int df = -1; df <= 1; ++df) {
+                if (dr == 0 && df == 0) continue;
+                int r = kr + dr, f = kf + df;
+                if (r < 0 || r > 7 || f < 0 || f > 7) continue;
+                int sqIdx = idx(r, f);
+                if (squareAttacked(sqIdx, 1 - color)) ++attacks;
+            }
+        }
+        s += (color == 0) ? -attacks * 8 : attacks * 8;
+    }
+
+    // doubled pawns penalty
+    for (int f = 0; f < 8; ++f) {
+        int whitePawns = 0, blackPawns = 0;
+        for (int r = 0; r < 8; ++r) {
+            char sq = board[idx(r, f)];
+            if (sq == 'p') ++whitePawns;
+            else if (sq == 'P') ++blackPawns;
+        }
+        if (whitePawns > 1) s -= (whitePawns - 1) * 10;
+        if (blackPawns > 1) s += (blackPawns - 1) * 10;
+    }
+
+    // isolated pawns penalty
+    for (int f = 0; f < 8; ++f) {
+        int whitePawns = 0, blackPawns = 0;
+        for (int r = 0; r < 8; ++r) {
+            char sq = board[idx(r, f)];
+            if (sq == 'p') ++whitePawns;
+            else if (sq == 'P') ++blackPawns;
+        }
+        if (whitePawns == 1) {
+            if (f > 0 && board[idx(rankOf(kingSq[0]), f - 1)] != 'p' &&
+                f < 7 && board[idx(rankOf(kingSq[0]), f + 1)] != 'p')
+                s -= 10;
+        }
+        if (blackPawns == 1) {
+            if (f > 0 && board[idx(rankOf(kingSq[1]), f - 1)] != 'P' &&
+                f < 7 && board[idx(rankOf(kingSq[1]), f + 1)] != 'P')
+                s += 10;
+        }
+    }
+
+    // final sign handling (white‑positive)
+    return (sideToMove == 0) ? s : -s;
 }
 
 string sqName(int s){ string r; r+=('a'+fileOf(s)); r+=('1'+rankOf(s)); return r; }
