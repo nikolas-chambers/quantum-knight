@@ -147,7 +147,16 @@ void setFen(const string&fen){
 int val[256]; // by piece char
 void initVal(){ val['P']=100;val['N']=320;val['B']=330;val['R']=500;val['Q']=900;val['K']=20000;
   val['p']=-100;val['n']=-320;val['b']=-330;val['r']=-500;val['q']=-900;val['k']=-20000; }
-int evaluate(){ int s=0; for(int q=0;q<128;q++) if(onBoard(q)&&board[q]) s+=val[board[q]]; return sideToMove==0?s:-s; }
+const int PST_P[64]={0,0,0,0,0,0,0,0, 5,10,10,-20,-20,10,10,5, 5,-5,-10,0,0,-10,-5,5, 0,0,0,20,20,0,0,0, 5,5,10,25,25,10,5,5, 10,10,20,30,30,20,10,10, 50,50,50,50,50,50,50,50, 0,0,0,0,0,0,0,0};
+const int PST_N[64]={-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,0,0,0,-20,-40, -30,0,10,15,15,10,0,-30, -30,5,15,20,20,15,5,-30, -30,0,15,20,20,15,0,-30, -30,5,10,15,15,10,5,-30, -40,-20,0,5,5,0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50};
+const int PST_B[64]={-20,-10,-10,-10,-10,-10,-10,-20, -10,5,0,0,0,0,5,-10, -10,10,10,10,10,10,10,-10, -10,0,10,10,10,10,0,-10, -10,5,5,10,10,5,5,-10, -10,0,5,10,10,5,0,-10, -10,0,0,0,0,0,0,-10, -20,-10,-10,-10,-10,-10,-10,-20};
+const int PST_K[64]={20,30,10,0,0,10,30,20, 20,20,0,0,0,0,20,20, -10,-20,-20,-20,-20,-20,-20,-10, -20,-30,-30,-40,-40,-30,-30,-20, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30};
+int evaluate(){ int s=0;
+  for(int q=0;q<128;q++){ if(!onBoard(q)||!board[q])continue; int p=board[q]; s+=val[p];
+    int mi=(colorOf(p)==0)?(rankOf(q)*8+fileOf(q)):((rankOf(q)*8+fileOf(q))^56); int t=typeOf(p), ps=0;
+    if(t=='p')ps=PST_P[mi]; else if(t=='n')ps=PST_N[mi]; else if(t=='b')ps=PST_B[mi]; else if(t=='k')ps=PST_K[mi];
+    s += (colorOf(p)==0)?ps:-ps; }
+  return sideToMove==0?s:-s; }
 
 string sqName(int s){ string r; r+=('a'+fileOf(s)); r+=('1'+rankOf(s)); return r; }
 string moveStr(const Move&m){ string r=sqName(m.from)+sqName(m.to); if(m.promo) r+=char(tolower(m.promo)); return r; }
