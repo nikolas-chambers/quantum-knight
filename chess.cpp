@@ -151,12 +151,80 @@ const int PST_P[64]={0,0,0,0,0,0,0,0, 5,10,10,-20,-20,10,10,5, 5,-5,-10,0,0,-10,
 const int PST_N[64]={-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,0,0,0,-20,-40, -30,0,10,15,15,10,0,-30, -30,5,15,20,20,15,5,-30, -30,0,15,20,20,15,0,-30, -30,5,10,15,15,10,5,-30, -40,-20,0,5,5,0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50};
 const int PST_B[64]={-20,-10,-10,-10,-10,-10,-10,-20, -10,5,0,0,0,0,5,-10, -10,10,10,10,10,10,10,-10, -10,0,10,10,10,10,0,-10, -10,5,5,10,10,5,5,-10, -10,0,5,10,10,5,0,-10, -10,0,0,0,0,0,0,-10, -20,-10,-10,-10,-10,-10,-10,-20};
 const int PST_K[64]={20,30,10,0,0,10,30,20, 20,20,0,0,0,0,20,20, -10,-20,-20,-20,-20,-20,-20,-10, -20,-30,-30,-40,-40,-30,-30,-20, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30};
-int evaluate(){ int s=0;
-  for(int q=0;q<128;q++){ if(!onBoard(q)||!board[q])continue; int p=board[q]; s+=val[p];
-    int mi=(colorOf(p)==0)?(rankOf(q)*8+fileOf(q)):((rankOf(q)*8+fileOf(q))^56); int t=typeOf(p), ps=0;
-    if(t=='p')ps=PST_P[mi]; else if(t=='n')ps=PST_N[mi]; else if(t=='b')ps=PST_B[mi]; else if(t=='k')ps=PST_K[mi];
-    s += (colorOf(p)==0)?ps:-ps; }
-  return sideToMove==0?s:-s; }
+int evaluate() {
+  int s = 0;
+  for (int q = 0; q < 128; q++) {
+    if (!onBoard(q) || !board[q]) continue;
+    int p = board[q];
+    s += val[p];
+    int mi = (colorOf(p) == 0) ? (rankOf(q) * 8 + fileOf(q)) : ((rankOf(q) * 8 + fileOf(q)) ^ 56);
+    int t = typeOf(p), ps = 0;
+    if (t == 'p') ps = PST_P[mi]; 
+    else if (t == 'n') ps = PST_N[mi]; 
+    else if (t == 'b') ps = PST_B[mi]; 
+    else if (t == 'k') ps = PST_K[mi];
+    s += (colorOf(p) == 0) ? ps : -ps;
+  }
+
+  // Passed pawns
+  for (int q = 0; q < 128; q++) {
+    if (!onBoard(q) || board[q] != 'p' && board[q] != 'P') continue;
+    int p = board[q];
+    int rank = rankOf(q);
+    int file = fileOf(q);
+    bool passed = true;
+    for (int r = (colorOf(p) == 0) ? rank + 1 : rank - 1; (colorOf(p) == 0) ? r < 8 : r >= 0; r += (colorOf(p) == 0) ? 1 : -1) {
+      if (board[(r * 8) + file] == (colorOf(p) == 0) ? 'p' : 'P') {
+        passed = false;
+        break;
+      }
+    }
+    if (passed) s += (colorOf(p) == 0) ? 50 : -50;
+  }
+
+  // Rook on open or half-open file
+  for (int q = 0; q < 128; q++) {
+    if (!onBoard(q) || board[q] != 'r' && board[q] != 'R') continue;
+    int p = board[q];
+    int file = fileOf(q);
+    bool open = true;
+    bool halfOpen = false;
+    for (int r = 0; r < 8; r++) {
+      if (board[(r * 8) + file] == (colorOf(p) == 0) ? 'p' : 'P') {
+        open = false;
+        halfOpen = true;
+      }
+    }
+    if (open) s += (colorOf(p) == 0) ? 20 : -20;
+    else if (halfOpen) s += (colorOf(p) == 0) ? 10 : -10;
+  }
+
+  // King pawn shield
+  for (int q = 0; q < 128; q++) {
+    if (!onBoard(q) || board[q] != 'p' && board[q] != 'P') continue;
+    int p = board[q];
+    int rank = rankOf(q);
+    int file = fileOf(q);
+    if ((colorOf(p) == 0 && rank >= 6) || (colorOf(p) == 1 && rank <= 1)) {
+      if (fileOf(kingSq[colorOf(p)]) == file || fileOf(kingSq[colorOf(p)]) == file + 1 || fileOf(kingSq[colorOf(p)]) == file - 1) {
+        s += (colorOf(p) == 0) ? 10 : -10;
+      }
+    }
+  }
+
+  // Bishop pair
+  int whiteBishops = 0;
+  int blackBishops = 0;
+  for (int q = 0; q < 128; q++) {
+    if (!onBoard(q) || board[q] != 'b' && board[q] != 'B') continue;
+    if (colorOf(board[q]) == 0) whiteBishops++;
+    else blackBishops++;
+  }
+  if (whiteBishops >= 2) s += 50;
+  if (blackBishops >= 2) s -= 50;
+
+  return sideToMove == 0 ? s : -s;
+}
 
 string sqName(int s){ string r; r+=('a'+fileOf(s)); r+=('1'+rankOf(s)); return r; }
 string moveStr(const Move&m){ string r=sqName(m.from)+sqName(m.to); if(m.promo) r+=char(tolower(m.promo)); return r; }

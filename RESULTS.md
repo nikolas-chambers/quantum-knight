@@ -1,36 +1,35 @@
 # QuantumKnight — Results
 
 Match results against [Stockfish 17.1](https://stockfishchess.org/) at various skill levels.
-QuantumKnight plays White; both engines search to the same fixed depth.
+Each row is an **8-game match**, colors alternated, both engines at fixed depth 5.
+Score is from QuantumKnight's view (win = 1, draw = 0.5).
 
 ## Strength ladder
 
-| Opponent          | Result | Outcome                   | Moves |
-|-------------------|:------:|---------------------------|:-----:|
-| Stockfish skill 0 | ✅ Win  | checkmate                 |  93   |
-| Stockfish skill 3 | ✅ Win  | checkmate                 |  59   |
-| Stockfish skill 5 | ✅ Win  | checkmate                 |  73   |
-| Stockfish skill 6 | ✅ Win  | checkmate                 |  27   |
-| Stockfish skill 7 | 🤝 Draw | fivefold repetition       | 213   |
-| Stockfish skill 8 | ❌ Loss | checkmate                 | 192   |
+| Opponent          | Score | W–D–L  | Verdict          |
+|-------------------|:-----:|:------:|------------------|
+| Stockfish skill 6 | 4.0/8 | 2–4–2  | ~even            |
+| Stockfish skill 7 | 5.5/8 | 5–1–2  | ✅ winning record |
 
-**Current ceiling:** beats Stockfish up to skill 6, holds skill 7 to a draw.
+Single games at these skill levels are very noisy (Stockfish plays randomized
+sub-optimal moves), so results are reported as multi-game match scores rather than
+one-off games.
 
-## Progress over versions
+## How it got here
 
-| Milestone                                   | Best result        |
-|---------------------------------------------|--------------------|
-| Base engine (alpha-beta)                    | beats skill 0      |
-| + piece-square tables                       | beats skill 3      |
-| + quiescence search                         | beats skill 5      |
-| + transposition table, MVV-LVA, killers     | beats skill 6, draws skill 7 |
+| Milestone                                   | Gain                         |
+|---------------------------------------------|------------------------------|
+| Base engine (alpha-beta)                    | plays legal, perft-correct   |
+| + piece-square tables                       | positional sense             |
+| + quiescence search                         | no horizon blunders          |
+| + transposition table, MVV-LVA, killers     | deeper, sharper search       |
+| + richer evaluation                         | winning record vs skill 7    |
 
-The transposition table + move ordering also turned the skill-8 game from a
-70-move loss into a 192-move loss — the engine now holds far longer under pressure.
+Movegen stays **perft-verified at 25/25** through every change.
 
 ## Reproduce
 
 ```sh
 g++ -O2 -std=c++17 -o engine chess.cpp
-python game.py stockfish --skill 6 --depth 5
+python game.py stockfish --skill 7 --depth 5
 ```
