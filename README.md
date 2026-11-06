@@ -46,4 +46,3 @@ See `RESULTS.md` for the full ladder.
 ## Testing
 - `perft_key.json` — Stockfish-verified perft counts
 - `game.py <skill> <depth>` — play a game vs Stockfish (needs `python-chess` + Stockfish)
-- `gym.py <rounds>` — self-improvement loop that proposes, gates, and ranks evaluation changes

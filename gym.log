@@ -1,0 +1,24 @@
+
+## gym session 2026-11-06 11:53
+- BASELINE: REGRESSED vs skill6 (score 0, CHECKMATE)  -> fitness None
+
+### round 1
+  [wisdom] call spirit — expensive_spirit_needed (complexity=0.95, tier=mid_range)
+  [delegate] single answer via Groq
+
+  [delegate] usage vs limits:
+    Cloudflare             6/   10,000 requests      0.060% [..........] ~$0.000000  9,994 left
+    Groq              18,473/  500,000 tokens        3.695% [..........] ~$0.003695  481,527 left
+    Charm Hyper            0/      100 hypercredits   0.000% [..........] ~$0.000000  100 left
+    OpenRouter         1,974 tok (free tier)
+    Qwen               1,706 tok (free tier)
+    HuggingFace            0 tok (free tier)
+    Gemini                 0 tok (free tier)
+    Mistral                0 tok (unlimited)  ~$0.000000  pay-per-token
+    AionLabs              25 tok (free tier)
+                                         est session cost ~$0.003695
+                                         est tokens burned 22,184
+- kid returned no code block -> skip
+
+### round 2
+  [wisdom] call spirit — expensive_spirit_needed (complexity=0.95, tier=mid_range)
