@@ -155,12 +155,29 @@ const int PST_K[64]={20,30,10,0,0,10,30,20, 20,20,0,0,0,0,20,20, -10,-20,-20,-20
 // Botvinnik is the balanced default = baseline 1.0 weights (protects the queen).
 struct Pers { double bishopPair, passed, rookFile, mob, shield, kingAtk, pawnStruct; const char* name; };
 Pers PERS = {1,1,1,1,1,1,1,"Botvinnik"};
+bool CONDUCT = false; // chairman available but OFF by default (unproven: 50% vs Botvinnik)
 void setPersonality(const string& n){
     string x; for(char c:n) x += (char)tolower(c);
     if      (x=="tal")       PERS = {1.0,1.1,1.2,1.6,0.6,1.3,0.7,"Tal"};        // bombs: initiative, bares its own king
     else if (x=="petrosian") PERS = {1.0,1.0,1.0,0.8,2.0,1.4,1.8,"Petrosian"};  // armor: pawn shield, no weaknesses
     else if (x=="smyslov")   PERS = {1.4,1.6,1.4,1.3,1.0,1.0,1.2,"Smyslov"};    // endgame: activity + passers + pair
     else                     PERS = {1,1,1,1,1,1,1,"Botvinnik"};                // balanced, prepared default
+}
+
+void chooseChairman(){            // read the board, deploy the right Russian (the hive's conductor)
+    int us=sideToMove, them=us^1; (void)them;
+    int mat=0;
+    for(int q=0;q<128;q++){ if(onBoard(q)&&board[q]){ int t=typeOf(board[q]); if(t!='k') mat+=abs(val[board[q]]); } }
+    auto exposure=[&](int color){ int ks=kingSq[color], n=0;
+        for(int dr=-1;dr<=1;dr++) for(int df=-1;df<=1;df++){ if(!dr&&!df) continue;
+            int r=rankOf(ks)+dr, f=fileOf(ks)+df; if(r<0||r>7||f<0||f>7) continue;
+            if(squareAttacked(r*16+f, color^1)) n++; }
+        return n; };
+    int ourExp=exposure(us), theirExp=exposure(us^1);
+    if(mat < 2600)         setPersonality("smyslov");    // endgame: harmony + passers
+    else if(ourExp >= 3)   setPersonality("petrosian");  // our king under fire: armor
+    else if(theirExp >= 2) setPersonality("tal");        // their king exposed: bombs
+    else                   setPersonality("botvinnik");  // nothing decisive: balanced
 }
 
 int evaluate() {
@@ -531,10 +548,12 @@ int main(int argc,char**argv){
     istringstream is(line); string tok; is>>tok;
     if(tok=="uci"){ cout<<"id name QuantumKnight\nid author the village\n"
       "option name Personality type combo default Botvinnik var Botvinnik var Tal var Petrosian var Smyslov\n"
+      "option name Conduct type check default false\n"
       "uciok\n"<<flush; }
     else if(tok=="isready") cout<<"readyok\n"<<flush;
     else if(tok=="setoption"){ string a,name,val; while(is>>a){ if(a=="name") is>>name; else if(a=="value") is>>val; }
-      if(name=="Personality") setPersonality(val); }
+      if(name=="Personality") setPersonality(val);
+      else if(name=="Conduct") CONDUCT = (val=="true"||val=="1"||val=="on"); }
     else if(tok=="ucinewgame") setFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     else if(tok=="position"){ string w; is>>w; string rest;
       if(w=="startpos"){ setFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"); is>>w; }
@@ -547,6 +566,7 @@ int main(int argc,char**argv){
       while(is>>a){ if(a=="depth"){is>>depth;} else if(a=="movetime"){is>>movetime;}
         else if(a=="wtime"){is>>wt;} else if(a=="btime"){is>>bt;}
         else if(a=="winc"){is>>winc;} else if(a=="binc"){is>>binc;} }
+      if(CONDUCT) chooseChairman();
       nodes=0; Move b;
       if(depth>0 && movetime<0 && wt<0) b=searchBest(depth);
       else { long long budget=movetime;
