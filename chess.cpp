@@ -524,18 +524,89 @@ int negamax(int depth, int alpha, int beta, int ply) {
 
     return bestScore;
 }
-Move searchBest(int maxDepth){
-  ttClear(); for(auto&k:killers){ k[0]={0,0,0,0}; k[1]={0,0,0,0}; }
-  Move best{0,0,0,0};
-  for(int d=1;d<=maxDepth;d++){ vector<Move> mv; legalMoves(mv); if(mv.empty())break;
-    u64 key=hashPos(); Move ttm = (TT[key&TT_MASK].key==key)?TT[key&TT_MASK].best:best;
-    int alpha=-100000,beta=100000,bsc=-100000; Move bm=mv[0];
-    orderMoves(mv,ttm,0);
-    for(auto&m:mv){ Undo u; makeMove(m,u); nodes++; int sc=-negamax(d-1,-beta,-alpha,1); unmakeMove(m,u);
-      if(sc>bsc){bsc=sc;bm=m;} if(bsc>alpha)alpha=bsc; }
-    best=bm;
-    TTE&e=TT[key&TT_MASK]; e.key=key; e.depth=d; e.score=bsc; e.flag=TT_EXACT; e.best=bm; }
-  return best;
+// fn: searchBest
+// poker EV vs weak opponent -> use aspiration windows so the search focuses near the
+// expected score, yielding deeper effective depth without extra time.
+Move searchBest(int maxDepth) {
+    ttClear();
+    for (auto &k : killers) {
+        k[0] = {0, 0, 0, 0};
+        k[1] = {0, 0, 0, 0};
+    }
+
+    Move best{0, 0, 0, 0};
+    int prevScore = 0;               // score from previous iteration
+    const int ASPIRATION_DELTA = 30; // window size
+
+    for (int d = 1; d <= maxDepth; ++d) {
+        vector<Move> moves;
+        legalMoves(moves);
+        if (moves.empty()) break;
+
+        u64 key = hashPos();
+        Move ttMove = (TT[key & TT_MASK].key == key) ? TT[key & TT_MASK].best : best;
+
+        // order moves using TT move (PV move) if available
+        orderMoves(moves, ttMove, 0);
+
+        // aspiration window parameters
+        int alpha = -100000, beta = 100000;
+        if (d > 1) {
+            alpha = prevScore - ASPIRATION_DELTA;
+            beta  = prevScore + ASPIRATION_DELTA;
+        }
+
+        int bestScore = -100000;
+        Move bestMove = moves[0];
+        bool searchDone = false;
+
+        // aspiration loop – expand window until score fits
+        while (!searchDone) {
+            int curAlpha = alpha, curBeta = beta;
+            for (const Move &m : moves) {
+                Undo u;
+                makeMove(m, u);
+                nodes++;
+                int sc = -negamax(d - 1, -curBeta, -curAlpha, 1);
+                unmakeMove(m, u);
+
+                if (sc > bestScore) {
+                    bestScore = sc;
+                    bestMove = m;
+                }
+                if (sc > curAlpha) curAlpha = sc;
+                // beta‑cutoff not needed here; we let negamax handle it.
+            }
+
+            // if score lies within the window we are done
+            if (bestScore > alpha && bestScore < beta) {
+                searchDone = true;
+            } else {
+                // widen the window and retry
+                if (bestScore <= alpha) {
+                    alpha -= ASPIRATION_DELTA * 2;
+                } else if (bestScore >= beta) {
+                    beta += ASPIRATION_DELTA * 2;
+                }
+                // keep alpha <= beta
+                if (alpha < -100000) alpha = -100000;
+                if (beta > 100000) beta = 100000;
+            }
+        }
+
+        // store iterative‑deepening result
+        best = bestMove;
+        prevScore = bestScore;
+
+        // write into transposition table as an exact entry for the root
+        TTE &e = TT[key & TT_MASK];
+        e.key   = key;
+        e.depth = d;
+        e.score = bestScore;
+        e.flag  = TT_EXACT;
+        e.best  = bestMove;
+    }
+    return best;
 }
 // iterative deepening with a wall-clock budget (ms); TT persists across depths
 Move searchTimed(long long budgetMs){
