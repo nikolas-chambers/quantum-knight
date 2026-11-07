@@ -151,6 +151,18 @@ const int PST_P[64]={0,0,0,0,0,0,0,0, 5,10,10,-20,-20,10,10,5, 5,-5,-10,0,0,-10,
 const int PST_N[64]={-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,0,0,0,-20,-40, -30,0,10,15,15,10,0,-30, -30,5,15,20,20,15,5,-30, -30,0,15,20,20,15,0,-30, -30,5,10,15,15,10,5,-30, -40,-20,0,5,5,0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50};
 const int PST_B[64]={-20,-10,-10,-10,-10,-10,-10,-20, -10,5,0,0,0,0,5,-10, -10,10,10,10,10,10,10,-10, -10,0,10,10,10,10,0,-10, -10,5,5,10,10,5,5,-10, -10,0,5,10,10,5,0,-10, -10,0,0,0,0,0,0,-10, -20,-10,-10,-10,-10,-10,-10,-20};
 const int PST_K[64]={20,30,10,0,0,10,30,20, 20,20,0,0,0,0,20,20, -10,-20,-20,-20,-20,-20,-20,-10, -20,-30,-30,-40,-40,-30,-30,-20, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30};
+// --- the council: Russian master personalities (eval weight profiles) ---
+// Botvinnik is the balanced default = baseline 1.0 weights (protects the queen).
+struct Pers { double bishopPair, passed, rookFile, mob, shield, kingAtk, pawnStruct; const char* name; };
+Pers PERS = {1,1,1,1,1,1,1,"Botvinnik"};
+void setPersonality(const string& n){
+    string x; for(char c:n) x += (char)tolower(c);
+    if      (x=="tal")       PERS = {1.0,1.1,1.2,1.6,0.6,1.3,0.7,"Tal"};        // bombs: initiative, bares its own king
+    else if (x=="petrosian") PERS = {1.0,1.0,1.0,0.8,2.0,1.4,1.8,"Petrosian"};  // armor: pawn shield, no weaknesses
+    else if (x=="smyslov")   PERS = {1.4,1.6,1.4,1.3,1.0,1.0,1.2,"Smyslov"};    // endgame: activity + passers + pair
+    else                     PERS = {1,1,1,1,1,1,1,"Botvinnik"};                // balanced, prepared default
+}
+
 int evaluate() {
     // material + piece‑square tables
     int s = 0;
@@ -178,8 +190,8 @@ int evaluate() {
         if (board[q] == 'b') ++whiteB;
         else if (board[q] == 'B') ++blackB;
     }
-    if (whiteB >= 2) s += 45;
-    if (blackB >= 2) s -= 45;
+    if (whiteB >= 2) s += (int)(45 * PERS.bishopPair);
+    if (blackB >= 2) s -= (int)(45 * PERS.bishopPair);
 
     // passed pawns (stronger detection)
     auto idx = [&](int r, int f) { return r * 8 + f; };
@@ -196,7 +208,7 @@ int evaluate() {
                     if (board[idx(rr, ff)] == 'P') passed = false;
                 }
             }
-            if (passed) s += 55;
+            if (passed) s += (int)(55 * PERS.passed);
         } else {                              // black pawn
             for (int rr = r - 1; rr >= 0 && passed; --rr) {
                 for (int ff = f - 1; ff <= f + 1; ++ff) {
@@ -204,7 +216,7 @@ int evaluate() {
                     if (board[idx(rr, ff)] == 'p') passed = false;
                 }
             }
-            if (passed) s -= 55;
+            if (passed) s -= (int)(55 * PERS.passed);
         }
     }
 
@@ -221,10 +233,10 @@ int evaluate() {
             else if (sq == 'P') ++blackPawns;
         }
         if (whitePawns == 0 && blackPawns == 0) {            // completely open
-            s += (colorOf(p) == 0) ? 30 : -30;
+            s += (int)(((colorOf(p) == 0) ? 30 : -30) * PERS.rookFile);
         } else if ((colorOf(p) == 0 && blackPawns == 0) ||
                    (colorOf(p) == 1 && whitePawns == 0)) { // half‑open
-            s += (colorOf(p) == 0) ? 15 : -15;
+            s += (int)(((colorOf(p) == 0) ? 15 : -15) * PERS.rookFile);
         }
     }
 
@@ -238,7 +250,7 @@ int evaluate() {
     mv.clear(); genMoves(mv);
     int mobB = mv.size();
     sideToMove = savedSide;
-    s += (mobW - mobB) * 5;
+    s += (int)((mobW - mobB) * 5 * PERS.mob);
 
     // king safety: pawn shield + enemy attacks around king
     for (int color = 0; color < 2; ++color) {
@@ -254,7 +266,7 @@ int evaluate() {
             if ((color == 0 && sq == 'p') || (color == 1 && sq == 'P'))
                 ++shield;
         }
-        s += (color == 0) ? shield * 12 : -shield * 12;
+        s += (int)(((color == 0) ? shield * 12 : -shield * 12) * PERS.shield);
 
         // enemy attacks on the king's surrounding squares
         int attacks = 0;
@@ -267,7 +279,7 @@ int evaluate() {
                 if (squareAttacked(sqIdx, 1 - color)) ++attacks;
             }
         }
-        s += (color == 0) ? -attacks * 8 : attacks * 8;
+        s += (int)(((color == 0) ? -attacks * 8 : attacks * 8) * PERS.kingAtk);
     }
 
     // doubled pawns penalty
@@ -278,8 +290,8 @@ int evaluate() {
             if (sq == 'p') ++whitePawns;
             else if (sq == 'P') ++blackPawns;
         }
-        if (whitePawns > 1) s -= (whitePawns - 1) * 10;
-        if (blackPawns > 1) s += (blackPawns - 1) * 10;
+        if (whitePawns > 1) s -= (int)((whitePawns - 1) * 10 * PERS.pawnStruct);
+        if (blackPawns > 1) s += (int)((blackPawns - 1) * 10 * PERS.pawnStruct);
     }
 
     // isolated pawns penalty
@@ -293,12 +305,12 @@ int evaluate() {
         if (whitePawns == 1) {
             if (f > 0 && board[idx(rankOf(kingSq[0]), f - 1)] != 'p' &&
                 f < 7 && board[idx(rankOf(kingSq[0]), f + 1)] != 'p')
-                s -= 10;
+                s -= (int)(10 * PERS.pawnStruct);
         }
         if (blackPawns == 1) {
             if (f > 0 && board[idx(rankOf(kingSq[1]), f - 1)] != 'P' &&
                 f < 7 && board[idx(rankOf(kingSq[1]), f + 1)] != 'P')
-                s += 10;
+                s += (int)(10 * PERS.pawnStruct);
         }
     }
 
@@ -502,13 +514,27 @@ Move parseUci(const string&s){ // e2e4 / e7e8q
 int main(int argc,char**argv){
   initVal(); initZobrist();
   if(argc>=4 && string(argv[1])=="perft"){ setFen(argv[2]); cout<<perft(atoi(argv[3]))<<endl; return 0; }
+  if(argc>=2 && string(argv[1])=="persona"){   // demo: each Russian's pick on a sharp position
+    const char* who = (argc>=3) ? argv[2] : nullptr;
+    string fen = (argc>=4) ? argv[3] : "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1";
+    for(string name : {string("Botvinnik"),string("Tal"),string("Petrosian"),string("Smyslov")}){
+      if(who && name!=string(who)) continue;
+      setPersonality(name); setFen(fen); nodes=0; Move b=searchBest(4);
+      cout<<name<<": bestmove "<<moveStr(b)<<"  eval "<<evaluate()<<"\n"<<flush;
+    }
+    return 0;
+  }
   // UCI
   string line;
   setFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
   while(getline(cin,line)){
     istringstream is(line); string tok; is>>tok;
-    if(tok=="uci"){ cout<<"id name QuantumKnight\nid author the village\nuciok\n"<<flush; }
+    if(tok=="uci"){ cout<<"id name QuantumKnight\nid author the village\n"
+      "option name Personality type combo default Botvinnik var Botvinnik var Tal var Petrosian var Smyslov\n"
+      "uciok\n"<<flush; }
     else if(tok=="isready") cout<<"readyok\n"<<flush;
+    else if(tok=="setoption"){ string a,name,val; while(is>>a){ if(a=="name") is>>name; else if(a=="value") is>>val; }
+      if(name=="Personality") setPersonality(val); }
     else if(tok=="ucinewgame") setFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     else if(tok=="position"){ string w; is>>w; string rest;
       if(w=="startpos"){ setFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"); is>>w; }
