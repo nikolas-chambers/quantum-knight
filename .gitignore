@@ -7,3 +7,5 @@ fen.cpp
 fen_engine
 *.o
 quantumknight-*
+.versions/
+config.json
