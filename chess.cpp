@@ -387,74 +387,89 @@ int qsearch(int alpha,int beta){
 }
 // fn: negamax
 // fn: negamax
+// fn: negamax
 int negamax(int depth, int alpha, int beta, int ply) {
     // ---------- leaf ----------
-    if (depth == 0) {
-        return qsearch(alpha, beta);
-    }
+    if (depth == 0) return qsearch(alpha, beta);
 
-    // ---------- null‑move pruning ----------
-    if (depth >= 3 && !inCheck(sideToMove)) {
-        const int R = 2 + depth / 4;
-        sideToMove ^= 1;                         // make null move
+    // ---------- static null‑move pruning ----------
+    // If the static eval already exceeds beta by a safe margin, prune.
+    // This is a cheap analogue of the "margin" idea from the Russian school:
+    // avoid wasting time on positions that look overwhelmingly good.
+    int staticEval = evaluate();
+    if (!inCheck(sideToMove) && depth >= 3 && staticEval + 300 >= beta) {
+        // make a null move (flip side to move)
+        sideToMove ^= 1;
+        int R = 2 + depth / 4;                     // reduction
         int score = -negamax(depth - R, -beta, -beta + 1, ply + 1);
-        sideToMove ^= 1;                         // undo null move
+        sideToMove ^= 1;                           // undo null move
         if (score >= beta) return beta;
     }
 
     // ---------- transposition table ----------
     u64 key = hashPos();
-    TTE &e = TT[key & TT_MASK];
+    TTE &tte = TT[key & TT_MASK];
     Move ttMove{0,0,0,0};
     int alphaOrig = alpha;
-
-    if (e.key == key && e.depth >= depth) {
-        if (e.flag == TT_EXACT) return e.score;
-        if (e.flag == TT_LOWER && e.score > alpha) alpha = e.score;
-        else if (e.flag == TT_UPPER && e.score < beta) beta = e.score;
-        if (alpha >= beta) return e.score;
-        ttMove = e.best;
-    } else if (e.key == key) {
-        ttMove = e.best;
+    if (tte.key == key && tte.depth >= depth) {
+        if (tte.flag == TT_EXACT) return tte.score;
+        if (tte.flag == TT_LOWER && tte.score > alpha) alpha = tte.score;
+        else if (tte.flag == TT_UPPER && tte.score < beta) beta = tte.score;
+        if (alpha >= beta) return tte.score;
+        ttMove = tte.best;
+    } else if (tte.key == key) {
+        ttMove = tte.best;
     }
 
     // ---------- move generation ----------
-    vector<Move> mv;
-    legalMoves(mv);
-    if (mv.empty()) {
+    vector<Move> moves;
+    legalMoves(moves);
+    if (moves.empty()) {
         if (inCheck(sideToMove)) return -30000 + ply; // checkmate
         return 0;                                     // stalemate
     }
 
-    orderMoves(mv, ttMove, ply);
-
-    // simple history heuristic (static table)
+    // ---------- move ordering ----------
+    // Order: TT move > killers > history > others
+    orderMoves(moves, ttMove, ply);
     static int history[128][128] = {};
-
-    // boost ordering using history scores (preserve ttMove at front)
-    if (mv.size() > 1) {
-        std::stable_sort(mv.begin() + 1, mv.end(),
+    // promote killer moves just after the TT move
+    if (killers[ply][0].from) {
+        auto it = std::find_if(moves.begin(), moves.end(),
+                               [&](const Move &m){ return m.from == killers[ply][0].from && m.to == killers[ply][0].to; });
+        if (it != moves.end() && it != moves.begin()+1) std::swap(*it, moves[1]);
+    }
+    if (killers[ply][1].from) {
+        auto it = std::find_if(moves.begin(), moves.end(),
+                               [&](const Move &m){ return m.from == killers[ply][1].from && m.to == killers[ply][1].to; });
+        if (it != moves.end() && it != moves.begin()+2) std::swap(*it, moves[2]);
+    }
+    // finally boost by history for the rest (stable sort preserves earlier ordering)
+    if (moves.size() > 1) {
+        std::stable_sort(moves.begin() + 1, moves.end(),
             [&](const Move &a, const Move &b) {
                 return history[a.from][a.to] > history[b.from][b.to];
             });
     }
 
     int bestScore = -100000;
-    Move bestMove = mv[0];
+    Move bestMove = moves[0];
     int movesTried = 0;
 
-    for (const Move &m : mv) {
+    // ---------- search loop ----------
+    for (const Move &m : moves) {
         Undo u;
         makeMove(m, u);
         nodes++;
 
-        bool givesCheck = inCheck(sideToMove); // opponent after makeMove
+        bool givesCheck = inCheck(sideToMove); // opponent's king in check after move
+        bool isCapture = (board[m.to] != EMPTY) || (m.flag == 2);
         int newDepth = depth - 1;
 
         // ---------- late‑move reductions ----------
-        if (movesTried >= 3 && depth >= 3 && !givesCheck
-            && board[m.to] != EMPTY && m.flag != 2) {
-            newDepth = depth - 2; // simple reduction
+        if (movesTried >= 3 && depth >= 3 && !givesCheck && !isCapture) {
+            // reduction proportional to depth (simple heuristic)
+            newDepth = depth - 2;
         }
 
         // ---------- check extension ----------
@@ -462,12 +477,12 @@ int negamax(int depth, int alpha, int beta, int ply) {
 
         int score;
         if (movesTried == 0) {
-            // full window for first (PV) move
+            // full window for the PV move
             score = -negamax(newDepth, -beta, -alpha, ply + 1);
         } else {
             // null‑window search
             score = -negamax(newDepth, -alpha - 1, -alpha, ply + 1);
-            // re‑search if it fails high
+            // re‑search if it fails high (research with full window)
             if (score > alpha && score < beta) {
                 score = -negamax(newDepth, -beta, -alpha, ply + 1);
             }
@@ -484,27 +499,27 @@ int negamax(int depth, int alpha, int beta, int ply) {
 
         // ---------- beta cutoff ----------
         if (alpha >= beta) {
-            // store killer move (only for non‑captures)
-            if (board[m.to] == EMPTY && m.flag != 2) {
+            // store killer move for quiet moves
+            if (!isCapture) {
                 killers[ply][1] = killers[ply][0];
                 killers[ply][0] = m;
             }
-            // update history heuristic
+            // update history heuristic (depth‑squared boost)
             history[m.from][m.to] += depth * depth;
             break;
         }
     }
 
-    // ---------- store in TT ----------
-    int flag = bestScore <= alphaOrig ? TT_UPPER
-               : bestScore >= beta   ? TT_LOWER
-                                     : TT_EXACT;
-    if (e.depth <= depth) {
-        e.key   = key;
-        e.depth = depth;
-        e.score = bestScore;
-        e.flag  = flag;
-        e.best  = bestMove;
+    // ---------- store result in TT ----------
+    int flag = (bestScore <= alphaOrig) ? TT_UPPER :
+               (bestScore >= beta)    ? TT_LOWER :
+                                        TT_EXACT;
+    if (tte.depth <= depth) {
+        tte.key   = key;
+        tte.depth = depth;
+        tte.score = bestScore;
+        tte.flag  = flag;
+        tte.best  = bestMove;
     }
 
     return bestScore;
