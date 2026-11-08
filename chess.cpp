@@ -180,6 +180,48 @@ void chooseChairman(){            // read the board, deploy the right Russian (t
     else                   setPersonality("botvinnik");  // nothing decisive: balanced
 }
 
+// count-only move generation: mirrors genMoves() exactly but only tallies a count,
+// no std::vector / no Move structs (the kid's idea; bugs fixed by the teacher — the
+// direction arrays KN/KG/BD/RD are 1-D 0x88 offsets, used as s+d). Count == genMoves().size().
+int countMoves(int us){
+  int them=us^1, count=0;
+  for(int s=0;s<128;s++){ if(!onBoard(s))continue; int p=board[s]; if(!p||colorOf(p)!=us)continue;
+    int t=typeOf(p);
+    if(t=='p'){
+      int fwd = us==0?16:-16; int startRank=us==0?1:6; int promoRank=us==0?6:1;
+      int one=s+fwd;
+      if(onBoard(one)&&board[one]==EMPTY){
+        if(rankOf(s)==promoRank){ count+=4; }
+        else { count++;
+          int two=s+2*fwd; if(rankOf(s)==startRank&&board[two]==EMPTY) count++; }
+      }
+      for(int cd: {fwd+1,fwd-1}){ int c=s+cd; if(!onBoard(c))continue;
+        if(board[c]&&colorOf(board[c])==them){
+          if(rankOf(s)==promoRank){ count+=4; }
+          else count++;
+        } else if(c==epSquare && epSquare!=-1){ count++; }
+      }
+    } else if(t=='n'){ for(int d:KN){ int c=s+d; if(onBoard(c)&&(board[c]==EMPTY||colorOf(board[c])==them)) count++; } }
+    else if(t=='k'){ for(int d:KG){ int c=s+d; if(onBoard(c)&&(board[c]==EMPTY||colorOf(board[c])==them)) count++; }
+      if(us==0){
+        if((castling&1)&&board[sq(5,0)]==EMPTY&&board[sq(6,0)]==EMPTY&&board[sq(7,0)]=='R'
+           &&!squareAttacked(sq(4,0),1)&&!squareAttacked(sq(5,0),1)&&!squareAttacked(sq(6,0),1)) count++;
+        if((castling&2)&&board[sq(3,0)]==EMPTY&&board[sq(2,0)]==EMPTY&&board[sq(1,0)]==EMPTY&&board[sq(0,0)]=='R'
+           &&!squareAttacked(sq(4,0),1)&&!squareAttacked(sq(3,0),1)&&!squareAttacked(sq(2,0),1)) count++;
+      } else {
+        if((castling&4)&&board[sq(5,7)]==EMPTY&&board[sq(6,7)]==EMPTY&&board[sq(7,7)]=='r'
+           &&!squareAttacked(sq(4,7),0)&&!squareAttacked(sq(5,7),0)&&!squareAttacked(sq(6,7),0)) count++;
+        if((castling&8)&&board[sq(3,7)]==EMPTY&&board[sq(2,7)]==EMPTY&&board[sq(1,7)]==EMPTY&&board[sq(0,7)]=='r'
+           &&!squareAttacked(sq(4,7),0)&&!squareAttacked(sq(3,7),0)&&!squareAttacked(sq(2,7),0)) count++;
+      }
+    } else { const int*dir; int n; if(t=='b'){dir=BD;n=4;} else if(t=='r'){dir=RD;n=4;} else {dir=KG;n=8;}
+      for(int i=0;i<n;i++){ int c=s+dir[i]; while(onBoard(c)){ if(board[c]==EMPTY) count++;
+        else { if(colorOf(board[c])==them) count++; break; } c+=dir[i]; } }
+    }
+  }
+  return count;
+}
+
 int evaluate() {
     // material + piece‑square tables
     int s = 0;
@@ -257,16 +299,8 @@ int evaluate() {
         }
     }
 
-    // mobility for both sides (weighted)
-    int savedSide = sideToMove;
-    std::vector<Move> mv;
-    sideToMove = 0;
-    mv.clear(); genMoves(mv);
-    int mobW = mv.size();
-    sideToMove = 1;
-    mv.clear(); genMoves(mv);
-    int mobB = mv.size();
-    sideToMove = savedSide;
+    // mobility for both sides (weighted) — count-only, no vector allocation (the kid's idea)
+    int mobW = countMoves(0), mobB = countMoves(1);
     s += (int)((mobW - mobB) * 5 * PERS.mob);
 
     // king safety: pawn shield + enemy attacks around king
