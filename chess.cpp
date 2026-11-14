@@ -1,4 +1,4 @@
-// Teacher's engine (0x88). Full legal movegen, perft, UCI, alpha-beta search.
+// QuantumKnight - single-file C++17 chess engine (0x88). Full legal movegen, perft, UCI, alpha-beta search.
 #include <bits/stdc++.h>
 #include <cstdint>
 using namespace std;
