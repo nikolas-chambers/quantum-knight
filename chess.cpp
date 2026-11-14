@@ -222,7 +222,10 @@ int countMoves(int us){
   return count;
 }
 
+// kid's bugfix (Cloudflare) from /home/user/qk-train/genepool/all6_evaluate.cpp; gates passed, not yet matched
 int evaluate() {
+    // fn: evaluate
+    // idea: bugfix only
     // material + piece‑square tables
     int s = 0;
     for (int q = 0; q < 128; ++q) {
@@ -246,25 +249,24 @@ int evaluate() {
     int whiteB = 0, blackB = 0;
     for (int q = 0; q < 128; ++q) {
         if (!onBoard(q)) continue;
-        if (board[q] == 'b') ++whiteB;
-        else if (board[q] == 'B') ++blackB;
+        if (board[q] == 'B') ++whiteB;
+        else if (board[q] == 'b') ++blackB;
     }
     if (whiteB >= 2) s += (int)(45 * PERS.bishopPair);
     if (blackB >= 2) s -= (int)(45 * PERS.bishopPair);
 
     // passed pawns (stronger detection)
-    auto idx = [&](int r, int f) { return r * 8 + f; };
     for (int q = 0; q < 128; ++q) {
         if (!onBoard(q)) continue;
-        char p = board[q];
-        if (p != 'p' && p != 'P') continue;
+        char pc = board[sq(fileOf(q), rankOf(q))];
+        if (pc != 'p' && pc != 'P') continue;
         int r = rankOf(q), f = fileOf(q);
         bool passed = true;
-        if (colorOf(p) == 0) {               // white pawn
+        if (colorOf(pc) == 0) {               // white pawn
             for (int rr = r + 1; rr < 8 && passed; ++rr) {
                 for (int ff = f - 1; ff <= f + 1; ++ff) {
                     if (ff < 0 || ff > 7) continue;
-                    if (board[idx(rr, ff)] == 'P') passed = false;
+                    if (board[sq(ff, rr)] == 'p') passed = false;
                 }
             }
             if (passed) s += (int)(55 * PERS.passed);
@@ -272,7 +274,7 @@ int evaluate() {
             for (int rr = r - 1; rr >= 0 && passed; --rr) {
                 for (int ff = f - 1; ff <= f + 1; ++ff) {
                     if (ff < 0 || ff > 7) continue;
-                    if (board[idx(rr, ff)] == 'p') passed = false;
+                    if (board[sq(ff, rr)] == 'P') passed = false;
                 }
             }
             if (passed) s -= (int)(55 * PERS.passed);
@@ -282,20 +284,20 @@ int evaluate() {
     // rook on open / half‑open files
     for (int q = 0; q < 128; ++q) {
         if (!onBoard(q)) continue;
-        char p = board[q];
-        if (p != 'r' && p != 'R') continue;
+        char pc = board[sq(fileOf(q), rankOf(q))];
+        if (pc != 'r' && pc != 'R') continue;
         int f = fileOf(q);
         int whitePawns = 0, blackPawns = 0;
         for (int r = 0; r < 8; ++r) {
-            char sq = board[idx(r, f)];
-            if (sq == 'p') ++whitePawns;
-            else if (sq == 'P') ++blackPawns;
+            char sq_v = board[sq(f, r)];
+            if (sq_v == 'P') ++whitePawns;
+            else if (sq_v == 'p') ++blackPawns;
         }
         if (whitePawns == 0 && blackPawns == 0) {            // completely open
-            s += (int)(((colorOf(p) == 0) ? 30 : -30) * PERS.rookFile);
-        } else if ((colorOf(p) == 0 && blackPawns == 0) ||
-                   (colorOf(p) == 1 && whitePawns == 0)) { // half‑open
-            s += (int)(((colorOf(p) == 0) ? 15 : -15) * PERS.rookFile);
+            s += (int)(((colorOf(pc) == 0) ? 30 : -30) * PERS.rookFile);
+        } else if ((colorOf(pc) == 0 && whitePawns == 0 && blackPawns > 0) ||
+                   (colorOf(pc) == 1 && blackPawns == 0 && whitePawns > 0)) { // half‑open
+            s += (int)(((colorOf(pc) == 0) ? 15 : -15) * PERS.rookFile);
         }
     }
 
@@ -309,12 +311,12 @@ int evaluate() {
         int kr = rankOf(ks), kf = fileOf(ks);
         // pawn shield (three squares in front of the king)
         int shield = 0;
-        int forward = (color == 0) ? -1 : 1;
+        int forward = (color == 0) ? 1 : -1;
         for (int df = -1; df <= 1; ++df) {
             int r = kr + forward, f = kf + df;
             if (r < 0 || r > 7 || f < 0 || f > 7) continue;
-            char sq = board[idx(r, f)];
-            if ((color == 0 && sq == 'p') || (color == 1 && sq == 'P'))
+            char pc = board[sq(f, r)];
+            if ((color == 0 && pc == 'P') || (color == 1 && pc == 'p'))
                 ++shield;
         }
         s += (int)(((color == 0) ? shield * 12 : -shield * 12) * PERS.shield);
@@ -326,8 +328,7 @@ int evaluate() {
                 if (dr == 0 && df == 0) continue;
                 int r = kr + dr, f = kf + df;
                 if (r < 0 || r > 7 || f < 0 || f > 7) continue;
-                int sqIdx = idx(r, f);
-                if (squareAttacked(sqIdx, 1 - color)) ++attacks;
+                if (squareAttacked(sq(f, r), 1 - color)) ++attacks;
             }
         }
         s += (int)(((color == 0) ? -attacks * 8 : attacks * 8) * PERS.kingAtk);
@@ -337,9 +338,9 @@ int evaluate() {
     for (int f = 0; f < 8; ++f) {
         int whitePawns = 0, blackPawns = 0;
         for (int r = 0; r < 8; ++r) {
-            char sq = board[idx(r, f)];
-            if (sq == 'p') ++whitePawns;
-            else if (sq == 'P') ++blackPawns;
+            char pc = board[sq(f, r)];
+            if (pc == 'P') ++whitePawns;
+            else if (pc == 'p') ++blackPawns;
         }
         if (whitePawns > 1) s -= (int)((whitePawns - 1) * 10 * PERS.pawnStruct);
         if (blackPawns > 1) s += (int)((blackPawns - 1) * 10 * PERS.pawnStruct);
@@ -349,19 +350,49 @@ int evaluate() {
     for (int f = 0; f < 8; ++f) {
         int whitePawns = 0, blackPawns = 0;
         for (int r = 0; r < 8; ++r) {
-            char sq = board[idx(r, f)];
-            if (sq == 'p') ++whitePawns;
-            else if (sq == 'P') ++blackPawns;
+            char pc = board[sq(f, r)];
+            if (pc == 'P') ++whitePawns;
+            else if (pc == 'p') ++blackPawns;
         }
         if (whitePawns == 1) {
-            if (f > 0 && board[idx(rankOf(kingSq[0]), f - 1)] != 'p' &&
-                f < 7 && board[idx(rankOf(kingSq[0]), f + 1)] != 'p')
-                s -= (int)(10 * PERS.pawnStruct);
+            bool isolated = true;
+            if (f > 0) {
+                for (int r = 0; r < 8; ++r) {
+                    if (board[sq(f - 1, r)] == 'P') {
+                        isolated = false;
+                        break;
+                    }
+                }
+            }
+            if (f < 7) {
+                for (int r = 0; r < 8; ++r) {
+                    if (board[sq(f + 1, r)] == 'P') {
+                        isolated = false;
+                        break;
+                    }
+                }
+            }
+            if (isolated) s -= (int)(10 * PERS.pawnStruct);
         }
         if (blackPawns == 1) {
-            if (f > 0 && board[idx(rankOf(kingSq[1]), f - 1)] != 'P' &&
-                f < 7 && board[idx(rankOf(kingSq[1]), f + 1)] != 'P')
-                s += (int)(10 * PERS.pawnStruct);
+            bool isolated = true;
+            if (f > 0) {
+                for (int r = 0; r < 8; ++r) {
+                    if (board[sq(f - 1, r)] == 'p') {
+                        isolated = false;
+                        break;
+                    }
+                }
+            }
+            if (f < 7) {
+                for (int r = 0; r < 8; ++r) {
+                    if (board[sq(f + 1, r)] == 'p') {
+                        isolated = false;
+                        break;
+                    }
+                }
+            }
+            if (isolated) s += (int)(10 * PERS.pawnStruct);
         }
     }
 
