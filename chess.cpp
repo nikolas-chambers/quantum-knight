@@ -181,8 +181,8 @@ void chooseChairman(){            // read the board, deploy the right Russian (t
 }
 
 // count-only move generation: mirrors genMoves() exactly but only tallies a count,
-// no std::vector / no Move structs (the kid's idea; bugs fixed by the teacher — the
-// direction arrays KN/KG/BD/RD are 1-D 0x88 offsets, used as s+d). Count == genMoves().size().
+// no std::vector / no Move structs. The direction arrays KN/KG/BD/RD are 1-D 0x88
+// offsets, used as s+d. Count == genMoves().size().
 int countMoves(int us){
   int them=us^1, count=0;
   for(int s=0;s<128;s++){ if(!onBoard(s))continue; int p=board[s]; if(!p||colorOf(p)!=us)continue;
@@ -221,11 +221,7 @@ int countMoves(int us){
   }
   return count;
 }
-
-// kid's bugfix (Cloudflare) from /home/user/qk-train/genepool/all6_evaluate.cpp; gates passed, not yet matched
 int evaluate() {
-    // fn: evaluate
-    // idea: bugfix only
     // material + piece‑square tables
     int s = 0;
     for (int q = 0; q < 128; ++q) {
@@ -301,7 +297,7 @@ int evaluate() {
         }
     }
 
-    // mobility for both sides (weighted) — count-only, no vector allocation (the kid's idea)
+    // mobility for both sides (weighted) — count-only, no vector allocation
     int mobW = countMoves(0), mobB = countMoves(1);
     s += (int)((mobW - mobB) * 5 * PERS.mob);
 
@@ -450,9 +446,6 @@ int qsearch(int alpha,int beta){
     if(sc>=beta) return beta; if(sc>alpha) alpha=sc; }
   return alpha;
 }
-// fn: negamax
-// fn: negamax
-// fn: negamax
 int negamax(int depth, int alpha, int beta, int ply) {
     // ---------- leaf ----------
     if (depth == 0) return qsearch(alpha, beta);
@@ -589,7 +582,6 @@ int negamax(int depth, int alpha, int beta, int ply) {
 
     return bestScore;
 }
-// fn: searchBest
 // poker EV vs weak opponent -> use aspiration windows so the search focuses near the
 // expected score, yielding deeper effective depth without extra time.
 Move searchBest(int maxDepth) {
@@ -723,7 +715,7 @@ int main(int argc,char**argv){
   setFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
   while(getline(cin,line)){
     istringstream is(line); string tok; is>>tok;
-    if(tok=="uci"){ cout<<"id name QuantumKnight\nid author the village\n"
+    if(tok=="uci"){ cout<<"id name QuantumKnight\nid author nikolas-chambers\n"
       "option name Personality type combo default Botvinnik var Botvinnik var Tal var Petrosian var Smyslov\n"
       "option name Conduct type check default false\n"
       "uciok\n"<<flush; }
