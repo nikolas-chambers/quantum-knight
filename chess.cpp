@@ -436,15 +436,33 @@ void orderMoves(vector<Move>&mv,const Move&ttm,int ply){
   sort(sc.begin(),sc.end(),[](const pair<int,Move>&a,const pair<int,Move>&b){ return a.first>b.first; });
   for(size_t i=0;i<mv.size();i++) mv[i]=sc[i].second;
 }
+int qsearch(int alpha, int beta){
+    // Stand‑pat evaluation (null‑window anchor)
+    int stand = evaluate();
+    if (stand >= beta) return beta;
+    if (stand > alpha) alpha = stand;
 
-int qsearch(int alpha,int beta){
-  int stand=evaluate(); if(stand>=beta) return beta; if(stand>alpha) alpha=stand;
-  vector<Move> mv; legalMoves(mv);
-  Move none{0,0,0,0}; orderMoves(mv,none,0);
-  for(auto&m:mv){ if(board[m.to]==EMPTY && m.flag!=2) continue;   // captures only (incl. en passant)
-    Undo u; makeMove(m,u); nodes++; int sc=-qsearch(-beta,-alpha); unmakeMove(m,u);
-    if(sc>=beta) return beta; if(sc>alpha) alpha=sc; }
-  return alpha;
+    // Generate only tactical moves: captures, en‑passant and promotions
+    vector<Move> mv;
+    legalMoves(mv);
+    Move none{0,0,0,0};
+    orderMoves(mv, none, 0);
+
+    for (const Move &m : mv){
+        // Skip pure quiet moves that are neither captures nor promotions
+        // (board[m.to]==EMPTY && m.promo==0 && m.flag!=2) → non‑capture, non‑promo
+        if (board[m.to] == EMPTY && m.promo == 0 && m.flag != 2) continue;
+
+        Undo u;
+        makeMove(m, u);
+        ++nodes;
+        int score = -qsearch(-beta, -alpha);
+        unmakeMove(m, u);
+
+        if (score >= beta) return beta;
+        if (score > alpha) alpha = score;
+    }
+    return alpha;
 }
 int negamax(int depth, int alpha, int beta, int ply) {
     // ---------- leaf ----------
